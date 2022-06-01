@@ -1,0 +1,110 @@
+version: "3.9"
+
+networks:
+  laravel:
+    driver: bridge
+
+#Volumes
+volumes:
+  persistent: {}
+
+services:
+  frontend:
+    build: 
+      context: ./frontend/www
+      dockerfile: Dockerfile
+    ports:
+      - 80
+    environment:
+      - BASE_URL=https://dev.shace.co
+    networks:
+      - laravel
+
+  api:
+    build: 
+      context: ./backend/api/www
+      dockerfile: Dockerfile
+    ports:
+      - 8000
+    env_file:
+      - backend/api/.env
+    networks:
+    - laravel
+
+  nginx:
+    build:
+      context: .
+      dockerfile: ./nginx/Dockerfile
+    ports:
+      - "${NGINX_PORT}:80"
+    volumes:
+      - ./source:/var/www/html:delegated
+    depends_on:
+      - php
+    networks:
+      - laravel
+
+  php:
+    build:
+      context: .
+      dockerfile: ./php/Dockerfile
+    volumes:
+      - ./source:/var/www/html:delegated
+    networks:
+      - laravel
+
+  mysql:
+    image: mysql
+    command: --innodb_use_native_aio=0
+    #container_name: mysql
+    restart: unless-stopped
+    tty: true
+    ports:
+      - "${DB_PORT}:3306"
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_ROOT_HOST: '%'
+      SERVICE_TAGS: prod
+      SERVICE_NAME: mysql
+    volumes:
+    - persistent:/var/lib/mysql/  #   - ./docker-compose/mysql_config/my.cnf:/etc/mysql/my.cnf
+    networks:
+      - laravel
+
+  npm:
+    image: node:latest
+    volumes:
+      - ./source:/var/www/html
+    working_dir: /var/www/html
+    entrypoint: ['npm']
+    networks:
+      - laravel
+
+  artisan:
+    build:
+      context: .
+      dockerfile: ./php/Dockerfile
+    volumes:
+      - ./source:/var/www/html:delegated
+    working_dir: /var/www/html
+    user: laravel
+    entrypoint: ['php', '/var/www/html/artisan']
+    networks:
+      - laravel
+  
+  composer:
+    build:
+      context: .
+      dockerfile: ./composer/Dockerfile
+    volumes:
+      - ./source:/var/www/html
+    working_dir: /var/www/html
+    depends_on:
+      - php
+    user: laravel
+    networks:
+      - laravel
+    entrypoint: ['composer', '--ignore-platform-reqs']
