@@ -1,110 +1,43 @@
-version: "3.9"
+version: "3"
 
 networks:
   laravel:
     driver: bridge
-
-#Volumes
 volumes:
-  persistent: {}
+     app-volume:
 
 services:
-  frontend:
-    build: 
-      context: ./frontend/www
+  #PHP Service
+  app:
+    build:
+      context: .
       dockerfile: Dockerfile
-    ports:
-      - 80
+    image: digitalocean.com/php
+    container_name: app
+    restart: unless-stopped
+    tty: true
     environment:
-      - BASE_URL=https://dev.shace.co
-    networks:
-      - laravel
-
-  api:
-    build: 
-      context: ./backend/api/www
-      dockerfile: Dockerfile
-    ports:
-      - 8000
-    env_file:
-      - backend/api/.env
-    networks:
-    - laravel
-
-  nginx:
-    build:
-      context: .
-      dockerfile: ./nginx/Dockerfile
-    ports:
-      - "${NGINX_PORT}:80"
+      SERVICE_NAME: app
+      SERVICE_TAGS: dev
+      GITHUB_PAT: ${GITHUB_PAT}
+    working_dir: /var/www/app
     volumes:
-      - ./source:/var/www/html:delegated
-    depends_on:
-      - php
+      - app-volume:/var/www/app
+      - ./php/local.ini:/usr/local/etc/php/conf.d/local.ini
     networks:
       - laravel
 
-  php:
-    build:
-      context: .
-      dockerfile: ./php/Dockerfile
-    volumes:
-      - ./source:/var/www/html:delegated
-    networks:
-      - laravel
-
-  mysql:
-    image: mysql
-    command: --innodb_use_native_aio=0
-    #container_name: mysql
+  #Nginx Service
+  webserver:
+    image: nginx:alpine
+    container_name: webserver
     restart: unless-stopped
     tty: true
     ports:
-      - "${DB_PORT}:3306"
-    environment:
-      MYSQL_DATABASE: ${DB_DATABASE}
-      MYSQL_USER: ${DB_USERNAME}
-      MYSQL_PASSWORD: ${DB_PASSWORD}
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
-      MYSQL_ROOT_HOST: '%'
-      SERVICE_TAGS: prod
-      SERVICE_NAME: mysql
+      - "80:80"
+      - "443:443"
     volumes:
-    - persistent:/var/lib/mysql/  #   - ./docker-compose/mysql_config/my.cnf:/etc/mysql/my.cnf
+      - app-volume:/var/www/app
+      - ./nginx/conf.d/:/etc/nginx/conf.d/
     networks:
       - laravel
-
-  npm:
-    image: node:latest
-    volumes:
-      - ./source:/var/www/html
-    working_dir: /var/www/html
-    entrypoint: ['npm']
-    networks:
-      - laravel
-
-  artisan:
-    build:
-      context: .
-      dockerfile: ./php/Dockerfile
-    volumes:
-      - ./source:/var/www/html:delegated
-    working_dir: /var/www/html
-    user: laravel
-    entrypoint: ['php', '/var/www/html/artisan']
-    networks:
-      - laravel
-  
-  composer:
-    build:
-      context: .
-      dockerfile: ./composer/Dockerfile
-    volumes:
-      - ./source:/var/www/html
-    working_dir: /var/www/html
-    depends_on:
-      - php
-    user: laravel
-    networks:
-      - laravel
-    entrypoint: ['composer', '--ignore-platform-reqs']
