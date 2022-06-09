@@ -1,9 +1,11 @@
 FROM php:8.1-fpm
 
-
-
 # Set working directory
-WORKDIR /var/www
+RUN mkdir -p /var/www/shace
+
+RUN mkdir -p /var/www/shace/api
+
+WORKDIR /var/www/shace/api
 
 # Install dependencies
 RUN apt-get update && apt-get install -y \
@@ -23,14 +25,11 @@ RUN apt-get update && apt-get install -y \
     
 
 # Git Clone
-RUN git clone "https://${GITHUB_PAT}@github.com/3x1io/shace-api" /var/www/app
+ARG GIT_PERSONAL_ACCESS_TOKEN
 
-
+RUN git clone "https://${GIT_PERSONAL_ACCESS_TOKEN}@github.com/3x1io/shace-api" /var/www/shace/api
 
 RUN echo $(ls -1 /tmp/dir)
-
-# Copy composer.lock and composer.json
-# COPY composer.lock composer.json /var/www/
 
 # Clear cache
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -44,26 +43,31 @@ RUN docker-php-ext-install intl
 
 # Install composer
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
-COPY ./.env /var/www/app/.env
+
+COPY ./.env /var/www/shace/api/.env
+
+# Copy File Config
+ADD ./www.conf /usr/local/etc/php-fpm.d/www.conf
+
 # Add user for laravel application
 RUN groupadd -g 1000 www
-RUN useradd -u 1000 -ms /bin/bash -g www www
-RUN chown -R www:www /var/www/app
-RUN chmod -R 755 /var/www/app
-# Copy existing application directory contents
-# COPY . /var/www
 
-# Copy existing application directory permissions
-# COPY --chown=www:www . /var/www
+RUN useradd -u 1000 -ms /bin/bash -g www www
+
+RUN chown -R www:www /var/www/shace/api
+
+RUN chmod -R 755 /var/www/shace/api
 
 # Change current user to www
 USER www
 
-WORKDIR /var/www/app
+WORKDIR /var/www/shace/api
 
 RUN composer install
+
 RUN npm install
 
 # Expose port 9000 and start php-fpm server
 EXPOSE 9000
+
 CMD ["php-fpm"]

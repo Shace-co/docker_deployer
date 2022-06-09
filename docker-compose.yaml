@@ -3,27 +3,55 @@ version: "3"
 networks:
   laravel:
     driver: bridge
+
 volumes:
-     app-volume:
+     api-volume:
+     frontend-volume:
 
 services:
   #PHP Service
-  app:
+  api:
     build:
-      context: .
+      context: ./laravel
       dockerfile: Dockerfile
+      args:
+        GIT_PERSONAL_ACCESS_TOKEN: ${GIT_PERSONAL_ACCESS_TOKEN}
     image: digitalocean.com/php
-    container_name: app
+    container_name: api
     restart: unless-stopped
     tty: true
     environment:
-      SERVICE_NAME: app
+      SERVICE_NAME: api
       SERVICE_TAGS: dev
-      GITHUB_PAT: ${GITHUB_PAT}
-    working_dir: /var/www/app
+ 
+    working_dir: /var/www/shace/api
     volumes:
-      - app-volume:/var/www/app
-      - ./php/local.ini:/usr/local/etc/php/conf.d/local.ini
+      - api-volume:/var/www/shace/api
+      - ./laravel/local.ini:/usr/local/etc/php/conf.d/local.ini
+    networks:
+      - laravel
+
+  
+
+  # Nuxt Frontend
+  frontend:
+    build: 
+      context: ./nuxtjs
+      dockerfile: Dockerfile
+      args:
+        GIT_PERSONAL_ACCESS_TOKEN: ${GIT_PERSONAL_ACCESS_TOKEN}
+        BASE_URL: http://localhost
+        HOST: 0.0.0.0
+        PORT: 4000
+    container_name: frontend
+    restart: always
+    ports:
+      - '4000:4000'
+    volumes:
+      - frontend-volume:/var/www/shace/frontend
+    command: 'npm run start'
+    depends_on:
+      - api
     networks:
       - laravel
 
@@ -37,7 +65,13 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - app-volume:/var/www/app
+      - api-volume:/var/www/shace/api
+      - frontend-volume:/var/www/shace/frontend
       - ./nginx/conf.d/:/etc/nginx/conf.d/
+      - ./nginx/nginx.conf /etc/nginx/nginx.conf
     networks:
       - laravel
+    depends_on:
+      - api
+      - frontend
+  
